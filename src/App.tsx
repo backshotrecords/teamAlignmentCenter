@@ -25,8 +25,8 @@ import { finalizeBrief, synthesizeSection } from "./lib/api";
 import {
   downloadMarkdown,
   getExportMarkdown,
-  printRenderedMarkdown,
 } from "./lib/briefMarkdown";
+import { downloadPdfFromMarkdownElement } from "./lib/pdfExport";
 import {
   loadAppState,
   loadSettings,
@@ -81,6 +81,7 @@ export default function App() {
     kind: "section" | "final";
     variant?: SynthesisVariant;
   } | null>(null);
+  const [pdfExporting, setPdfExporting] = useState(false);
   const finalPreviewRef = useRef<HTMLDivElement>(null);
 
   const activeProject = useMemo(() => {
@@ -396,20 +397,31 @@ export default function App() {
     }
   }
 
-  function exportPdf(): void {
-    const html =
-      finalPreviewRef.current?.querySelector(".markdown-preview")?.innerHTML ||
-      "";
+  async function exportPdf(): Promise<void> {
+    const previewElement =
+      finalPreviewRef.current?.querySelector<HTMLElement>(".markdown-preview");
 
-    if (!html) {
-      setError("The final preview is not ready to print yet.");
+    if (!previewElement) {
+      setError("The final preview is not ready to export yet.");
       return;
     }
 
-    const opened = printRenderedMarkdown(getProjectTitle(activeProject), html);
+    setPdfExporting(true);
+    setError("");
 
-    if (!opened) {
-      setError("Allow popups for this site, then try the PDF export again.");
+    try {
+      await downloadPdfFromMarkdownElement(
+        previewElement,
+        getProjectTitle(activeProject),
+      );
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "The PDF export failed.",
+      );
+    } finally {
+      setPdfExporting(false);
     }
   }
 
@@ -783,9 +795,17 @@ export default function App() {
                   <Download size={18} />
                   Markdown
                 </button>
-                <button type="button" onClick={exportPdf}>
-                  <Printer size={18} />
-                  PDF
+                <button
+                  type="button"
+                  disabled={pdfExporting}
+                  onClick={() => void exportPdf()}
+                >
+                  {pdfExporting ? (
+                    <Loader2 className="spin" size={18} />
+                  ) : (
+                    <Printer size={18} />
+                  )}
+                  {pdfExporting ? "Exporting" : "PDF"}
                 </button>
               </div>
             </div>

@@ -684,6 +684,29 @@ textarea {
   max-height: 820px;
 }
 
+.pdf-export-document.markdown-preview {
+  background: #ffffff;
+  box-shadow: none;
+  left: -10000px;
+  max-height: none;
+  overflow: visible;
+  padding: 48px;
+  position: fixed;
+  top: 0;
+  width: 794px;
+  z-index: -1;
+}
+
+.pdf-export-document,
+.pdf-export-document * {
+  box-sizing: border-box;
+}
+
+.pdf-export-document h1 {
+  border-bottom: 3px solid #1f7a5f;
+  padding-bottom: 12px;
+}
+
 .modal-backdrop {
   align-items: center;
   background: rgba(17, 24, 39, 0.45);
