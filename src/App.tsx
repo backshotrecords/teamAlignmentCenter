@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DictationTextarea } from "./components/DictationTextarea";
 import { MarkdownPreview } from "./components/MarkdownPreview";
 import { BRIEF_SECTIONS, getVideoEmbedUrl } from "./config/briefSections";
 import { createBlankProject, makeId } from "./data/defaultProject";
@@ -412,6 +413,11 @@ export default function App() {
     }
   }
 
+  function handleMissingApiKeyForVoice(): void {
+    setSettingsOpen(true);
+    setError("Add an OpenAI API key in settings before using voice input.");
+  }
+
   const isGeneratingSection = generation?.kind === "section";
   const isGeneratingFinal = generation?.kind === "final";
 
@@ -629,11 +635,12 @@ export default function App() {
                   <label className="question-card" key={question.id}>
                     <span>{question.prompt}</span>
                     <small>Example: {question.example}</small>
-                    <textarea
+                    <DictationTextarea
+                      apiKey={settings.apiKey}
+                      onDictationError={setError}
+                      onMissingApiKey={handleMissingApiKeyForVoice}
                       value={currentAnswers[question.id] || ""}
-                      onChange={(event) =>
-                        updateAnswer(question.id, event.target.value)
-                      }
+                      onChangeText={(value) => updateAnswer(question.id, value)}
                       rows={5}
                     />
                   </label>
@@ -694,13 +701,16 @@ export default function App() {
 
               <label className="editor-label">
                 Generated section Markdown
-                <textarea
+                <DictationTextarea
+                  apiKey={settings.apiKey}
                   className="markdown-editor"
+                  onDictationError={setError}
+                  onMissingApiKey={handleMissingApiKeyForVoice}
                   value={currentDraft.contentMarkdown}
                   placeholder="Generated section text will appear here. You can also draft directly."
-                  onChange={(event) =>
+                  onChangeText={(value) =>
                     updateCurrentDraft({
-                      contentMarkdown: event.target.value,
+                      contentMarkdown: value,
                     })
                   }
                   rows={12}
@@ -709,13 +719,16 @@ export default function App() {
 
               <label className="editor-label">
                 Assumptions
-                <textarea
+                <DictationTextarea
+                  apiKey={settings.apiKey}
                   className="assumption-editor"
+                  onDictationError={setError}
+                  onMissingApiKey={handleMissingApiKeyForVoice}
                   value={currentDraft.assumptions.join("\n")}
                   placeholder="One assumption per line."
-                  onChange={(event) =>
+                  onChangeText={(value) =>
                     updateCurrentDraft({
-                      assumptions: normalizeAssumptions(event.target.value),
+                      assumptions: normalizeAssumptions(value),
                     })
                   }
                   rows={4}
@@ -780,13 +793,16 @@ export default function App() {
             <div className="final-grid">
               <label className="editor-label final-editor">
                 Final Markdown
-                <textarea
+                <DictationTextarea
+                  apiKey={settings.apiKey}
                   className="markdown-editor"
+                  onDictationError={setError}
+                  onMissingApiKey={handleMissingApiKeyForVoice}
                   value={activeProject.finalMarkdown ?? exportMarkdown}
-                  onChange={(event) =>
+                  onChangeText={(value) =>
                     updateActiveProject((project) => ({
                       ...project,
-                      finalMarkdown: event.target.value,
+                      finalMarkdown: value,
                       finalUpdatedAt: new Date().toISOString(),
                     }))
                   }

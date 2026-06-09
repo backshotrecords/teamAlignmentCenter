@@ -32,6 +32,23 @@ interface FinalizeBriefArgs {
   }>;
 }
 
+export interface TranscriptionResult {
+  text: string;
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return window.btoa(binary);
+}
+
 async function postSynthesis<T>(body: unknown): Promise<T> {
   const response = await fetch("/api/synthesize", {
     method: "POST",
@@ -50,6 +67,35 @@ async function postSynthesis<T>(body: unknown): Promise<T> {
   }
 
   return payload as T;
+}
+
+export async function transcribeAudio(
+  apiKey: string,
+  audioFile: File,
+): Promise<TranscriptionResult> {
+  const audioBase64 = arrayBufferToBase64(await audioFile.arrayBuffer());
+
+  const response = await fetch("/api/transcribe", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      apiKey,
+      audioBase64,
+      mimeType: audioFile.type,
+      fileName: audioFile.name,
+    }),
+  });
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(
+      payload?.error || "The voice transcription request failed.",
+    );
+  }
+
+  return payload as TranscriptionResult;
 }
 
 export function synthesizeSection(
