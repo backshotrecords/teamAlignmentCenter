@@ -358,7 +358,7 @@ textarea {
   background: #eef3f4;
   border-radius: 8px;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   padding: 4px;
 }
 

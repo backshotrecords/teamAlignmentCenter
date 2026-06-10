@@ -39,6 +39,8 @@ export interface BriefProject {
   sectionDrafts: Record<string, SectionDraft>;
   finalMarkdown?: string;
   finalUpdatedAt?: string;
+  operatingMarkdown?: string;
+  operatingUpdatedAt?: string;
 }
 
 export interface AppState {
@@ -56,5 +58,9 @@ export interface SectionSynthesisResult {
 }
 
 export interface FinalBriefResult {
+  markdown: string;
+}
+
+export interface OperatingDocumentResult {
   markdown: string;
 }

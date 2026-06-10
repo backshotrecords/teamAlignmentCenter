@@ -21,10 +21,16 @@ import { DictationTextarea } from "./components/DictationTextarea";
 import { MarkdownPreview } from "./components/MarkdownPreview";
 import { BRIEF_SECTIONS, getVideoEmbedUrl } from "./config/briefSections";
 import { createBlankProject, makeId } from "./data/defaultProject";
-import { finalizeBrief, synthesizeSection } from "./lib/api";
+import {
+  finalizeBrief,
+  generateOperatingDocument,
+  synthesizeSection,
+} from "./lib/api";
 import {
   downloadMarkdown,
+  downloadMarkdownText,
   getExportMarkdown,
+  getOperatingDocumentMarkdown,
 } from "./lib/briefMarkdown";
 import { downloadPdfFromMarkdownElement } from "./lib/pdfExport";
 import {
@@ -72,17 +78,17 @@ export default function App() {
   const [state, setState] = useState<AppState>(() => loadAppState());
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [workspaceView, setWorkspaceView] = useState<"section" | "final">(
-    "section",
-  );
+  const [workspaceView, setWorkspaceView] = useState<
+    "section" | "final" | "operating"
+  >("section");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [generation, setGeneration] = useState<{
-    kind: "section" | "final";
+    kind: "section" | "final" | "operating";
     variant?: SynthesisVariant;
   } | null>(null);
   const [pdfExporting, setPdfExporting] = useState(false);
-  const finalPreviewRef = useRef<HTMLDivElement>(null);
+  const documentPreviewRef = useRef<HTMLDivElement>(null);
 
   const activeProject = useMemo(() => {
     return (
@@ -119,6 +125,10 @@ export default function App() {
   );
   const exportMarkdown = useMemo(
     () => getExportMarkdown(activeProject),
+    [activeProject],
+  );
+  const operatingMarkdown = useMemo(
+    () => getOperatingDocumentMarkdown(activeProject),
     [activeProject],
   );
   const videoUrl = getVideoEmbedUrl();
@@ -181,6 +191,8 @@ export default function App() {
       },
       finalMarkdown: undefined,
       finalUpdatedAt: undefined,
+      operatingMarkdown: undefined,
+      operatingUpdatedAt: undefined,
     }));
   }
 
@@ -197,6 +209,8 @@ export default function App() {
       },
       finalMarkdown: undefined,
       finalUpdatedAt: undefined,
+      operatingMarkdown: undefined,
+      operatingUpdatedAt: undefined,
     }));
   }
 
@@ -225,6 +239,7 @@ export default function App() {
       createdAt: now,
       updatedAt: now,
       finalUpdatedAt: activeProject.finalMarkdown ? now : undefined,
+      operatingUpdatedAt: activeProject.operatingMarkdown ? now : undefined,
     };
 
     setState((previous) => ({
@@ -384,6 +399,8 @@ export default function App() {
         ...project,
         finalMarkdown: result.markdown.trim(),
         finalUpdatedAt: new Date().toISOString(),
+        operatingMarkdown: undefined,
+        operatingUpdatedAt: undefined,
       }));
       setWorkspaceView("final");
     } catch (caughtError) {
@@ -397,12 +414,62 @@ export default function App() {
     }
   }
 
+  async function handleOperatingSynthesis(): Promise<void> {
+    if (!settings.apiKey.trim()) {
+      setSettingsOpen(true);
+      setError(
+        "Add an OpenAI API key in settings before generating the operating document.",
+      );
+      return;
+    }
+
+    if (!canReviewFinal) {
+      setError("Complete all eight sections before creating the operating document.");
+      return;
+    }
+
+    setGeneration({ kind: "operating" });
+    setError("");
+
+    try {
+      const sections = BRIEF_SECTIONS.map((section) => ({
+        number: section.number,
+        title: section.title,
+        answers: activeProject.answers[section.id] || {},
+        contentMarkdown:
+          activeProject.sectionDrafts[section.id]?.contentMarkdown || "",
+        assumptions: activeProject.sectionDrafts[section.id]?.assumptions || [],
+      }));
+      const result = await generateOperatingDocument({
+        apiKey: settings.apiKey,
+        project: activeProject,
+        sections,
+        finalMarkdown: activeProject.finalMarkdown,
+      });
+
+      updateActiveProject((project) => ({
+        ...project,
+        operatingMarkdown: result.markdown.trim(),
+        operatingUpdatedAt: new Date().toISOString(),
+      }));
+      setWorkspaceView("operating");
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Operating document synthesis failed.",
+      );
+    } finally {
+      setGeneration(null);
+    }
+  }
+
   async function exportPdf(): Promise<void> {
     const previewElement =
-      finalPreviewRef.current?.querySelector<HTMLElement>(".markdown-preview");
+      documentPreviewRef.current?.querySelector<HTMLElement>(".markdown-preview");
 
     if (!previewElement) {
-      setError("The final preview is not ready to export yet.");
+      setError("The document preview is not ready to export yet.");
       return;
     }
 
@@ -412,7 +479,9 @@ export default function App() {
     try {
       await downloadPdfFromMarkdownElement(
         previewElement,
-        getProjectTitle(activeProject),
+        workspaceView === "operating"
+          ? `${getProjectTitle(activeProject)} operating document`
+          : `${getProjectTitle(activeProject)} opportunity brief`,
       );
     } catch (caughtError) {
       setError(
@@ -432,6 +501,7 @@ export default function App() {
 
   const isGeneratingSection = generation?.kind === "section";
   const isGeneratingFinal = generation?.kind === "final";
+  const isGeneratingOperating = generation?.kind === "operating";
 
   return (
     <div className="app-shell">
@@ -599,6 +669,14 @@ export default function App() {
                 onClick={() => setWorkspaceView("final")}
               >
                 Final brief
+              </button>
+              <button
+                className={workspaceView === "operating" ? "is-selected" : ""}
+                type="button"
+                disabled={!canReviewFinal}
+                onClick={() => setWorkspaceView("operating")}
+              >
+                Operating doc
               </button>
             </div>
           </div>
@@ -774,24 +852,55 @@ export default function App() {
           <section className="final-workspace">
             <div className="final-toolbar">
               <div>
-                <p className="eyebrow">Complete opportunity brief</p>
-                <h3>Final executive summary</h3>
+                <p className="eyebrow">
+                  {workspaceView === "operating"
+                    ? "Supporting document"
+                    : "Complete opportunity brief"}
+                </p>
+                <h3>
+                  {workspaceView === "operating"
+                    ? "Operating document"
+                    : "Final executive summary"}
+                </h3>
               </div>
               <div className="final-actions">
                 <button
                   className="primary-button"
                   type="button"
-                  disabled={isGeneratingFinal || !canReviewFinal}
-                  onClick={handleFinalSynthesis}
+                  disabled={
+                    workspaceView === "operating"
+                      ? isGeneratingOperating || !canReviewFinal
+                      : isGeneratingFinal || !canReviewFinal
+                  }
+                  onClick={
+                    workspaceView === "operating"
+                      ? handleOperatingSynthesis
+                      : handleFinalSynthesis
+                  }
                 >
-                  {isGeneratingFinal ? (
+                  {(workspaceView === "operating"
+                    ? isGeneratingOperating
+                    : isGeneratingFinal) ? (
                     <Loader2 className="spin" size={18} />
                   ) : (
                     <Wand2 size={18} />
                   )}
-                  Generate final
+                  {workspaceView === "operating"
+                    ? "Generate operating"
+                    : "Generate final"}
                 </button>
-                <button type="button" onClick={() => downloadMarkdown(activeProject)}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    workspaceView === "operating"
+                      ? downloadMarkdownText(
+                          activeProject.operatingMarkdown ?? operatingMarkdown,
+                          getProjectTitle(activeProject),
+                          "operating-document",
+                        )
+                      : downloadMarkdown(activeProject)
+                  }
+                >
                   <Download size={18} />
                   Markdown
                 </button>
@@ -812,31 +921,54 @@ export default function App() {
 
             <div className="final-grid">
               <label className="editor-label final-editor">
-                Final Markdown
+                {workspaceView === "operating"
+                  ? "Operating Document Markdown"
+                  : "Final Markdown"}
                 <DictationTextarea
                   apiKey={settings.apiKey}
                   className="markdown-editor"
                   onDictationError={setError}
                   onMissingApiKey={handleMissingApiKeyForVoice}
-                  value={activeProject.finalMarkdown ?? exportMarkdown}
+                  value={
+                    workspaceView === "operating"
+                      ? activeProject.operatingMarkdown ?? operatingMarkdown
+                      : activeProject.finalMarkdown ?? exportMarkdown
+                  }
                   onChangeText={(value) =>
                     updateActiveProject((project) => ({
                       ...project,
-                      finalMarkdown: value,
-                      finalUpdatedAt: new Date().toISOString(),
+                      ...(workspaceView === "operating"
+                        ? {
+                            operatingMarkdown: value,
+                            operatingUpdatedAt: new Date().toISOString(),
+                          }
+                        : {
+                            finalMarkdown: value,
+                            finalUpdatedAt: new Date().toISOString(),
+                            operatingMarkdown: undefined,
+                            operatingUpdatedAt: undefined,
+                          }),
                     }))
                   }
                   rows={24}
                 />
               </label>
 
-              <div className="preview-block final-preview" ref={finalPreviewRef}>
+              <div className="preview-block final-preview" ref={documentPreviewRef}>
                 <div className="preview-heading">
                   <span>Rendered document</span>
                 </div>
                 <MarkdownPreview
-                  markdown={activeProject.finalMarkdown ?? exportMarkdown}
-                  label="Final brief preview"
+                  markdown={
+                    workspaceView === "operating"
+                      ? activeProject.operatingMarkdown ?? operatingMarkdown
+                      : activeProject.finalMarkdown ?? exportMarkdown
+                  }
+                  label={
+                    workspaceView === "operating"
+                      ? "Operating document preview"
+                      : "Final brief preview"
+                  }
                 />
               </div>
             </div>

@@ -1,0 +1,17 @@
+export const OPERATING_DOCUMENT_SECTIONS = [
+  "Project Summary",
+  "Concept Note",
+  "Outcomes and Goals",
+  "Rationale",
+  "Scope",
+  "Team",
+  "Milestones and Key Activities",
+  "Resources",
+  "Current State",
+  "Unknowns",
+  "Blockers and Dependencies",
+  "Risk and Mitigation",
+  "Reporting Claims",
+  "Decision Log",
+  "Supporting Documents",
+] as const;

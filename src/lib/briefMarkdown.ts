@@ -1,4 +1,5 @@
 import { BRIEF_SECTIONS } from "../config/briefSections";
+import { OPERATING_DOCUMENT_SECTIONS } from "../config/operatingDocument";
 import type { BriefProject } from "../types";
 
 function formatDisplayDate(value?: string): string {
@@ -71,15 +72,52 @@ export function getExportMarkdown(project: BriefProject): string {
   return project.finalMarkdown?.trim() || buildMarkdownFromProject(project);
 }
 
-export function downloadMarkdown(project: BriefProject): void {
-  const markdown = getExportMarkdown(project);
-  const baseName = fileSafeName(project.opportunityName || project.name) || "brief";
+export function buildOperatingDocumentDraft(project: BriefProject): string {
+  const title = project.opportunityName.trim() || project.name;
+  const lines: string[] = [
+    `# ${title} Operating Document`,
+    "",
+    "| Field | Value |",
+    "| --- | --- |",
+    `| Opportunity | ${tableCell(project.opportunityName || project.name)} |`,
+    `| Author | ${tableCell(project.author)} |`,
+    `| Version | ${tableCell(project.version)} |`,
+    `| Date | ${tableCell(formatDisplayDate(project.updatedAt))} |`,
+    "",
+    "_Generate the Operating Document after completing the opportunity brief sections._",
+    "",
+  ];
+
+  OPERATING_DOCUMENT_SECTIONS.forEach((section, index) => {
+    lines.push(`## ${index + 1}. ${section}`, "", "_TBD_", "");
+  });
+
+  return lines.join("\n");
+}
+
+export function getOperatingDocumentMarkdown(project: BriefProject): string {
+  return project.operatingMarkdown?.trim() || buildOperatingDocumentDraft(project);
+}
+
+export function downloadMarkdownText(
+  markdown: string,
+  title: string,
+  suffix: string,
+): void {
+  const baseName = fileSafeName(title) || "document";
   const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
 
   anchor.href = url;
-  anchor.download = `${baseName}-opportunity-brief.md`;
+  anchor.download = `${baseName}-${suffix}.md`;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+export function downloadMarkdown(project: BriefProject): void {
+  const markdown = getExportMarkdown(project);
+  const title = project.opportunityName || project.name;
+
+  downloadMarkdownText(markdown, title, "opportunity-brief");
 }

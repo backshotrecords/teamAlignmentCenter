@@ -2,6 +2,7 @@ import type {
   BriefProject,
   BriefSectionDefinition,
   FinalBriefResult,
+  OperatingDocumentResult,
   SectionSynthesisResult,
   SynthesisVariant,
 } from "../types";
@@ -30,6 +31,10 @@ interface FinalizeBriefArgs {
     contentMarkdown: string;
     assumptions: string[];
   }>;
+}
+
+interface GenerateOperatingDocumentArgs extends FinalizeBriefArgs {
+  finalMarkdown?: string;
 }
 
 export interface TranscriptionResult {
@@ -110,6 +115,15 @@ export function synthesizeSection(
 export function finalizeBrief(args: FinalizeBriefArgs): Promise<FinalBriefResult> {
   return postSynthesis<FinalBriefResult>({
     action: "final",
+    ...args,
+  });
+}
+
+export function generateOperatingDocument(
+  args: GenerateOperatingDocumentArgs,
+): Promise<OperatingDocumentResult> {
+  return postSynthesis<OperatingDocumentResult>({
+    action: "operating",
     ...args,
   });
 }

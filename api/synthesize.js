@@ -35,6 +35,19 @@ const finalSchema = {
   },
 };
 
+const operatingSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["markdown"],
+  properties: {
+    markdown: {
+      type: "string",
+      description:
+        "Complete Markdown operations document with all required sections in order.",
+    },
+  },
+};
+
 function sendCors(req, res) {
   res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -197,6 +210,52 @@ function buildFinalPayload(payload) {
   };
 }
 
+function buildOperatingPayload(payload) {
+  const { project, sections, finalMarkdown } = payload;
+
+  return {
+    model: OPENAI_MODEL,
+    temperature: 1,
+    store: false,
+    instructions: [
+      "You are creating an Operations Document that supports a business opportunity brief.",
+      "Use the existing opportunity brief answers and generated section drafts as the source material.",
+      "Write for product managers, product owners, delivery leads, and operators who need practical execution clarity after the brief is approved.",
+      "Use plain operational language. Be specific, grounded, and structured.",
+      "Create a complete Markdown document with this exact section order: Project Summary, Concept Note, Outcomes and Goals, Rationale, Scope, Team, Milestones and Key Activities, Resources, Current State, Unknowns, Blockers and Dependencies, Risk and Mitigation, Reporting Claims, Decision Log, Supporting Documents.",
+      "Where the source material does not contain enough information, do not invent false facts. Add clearly labeled TBD rows, editable placeholders, or 'To confirm' bullets.",
+      "Use tables for Team, Milestones and Key Activities, Resources, Unknowns, Blockers and Dependencies, Risk and Mitigation, Reporting Claims, Decision Log, and Supporting Documents.",
+      "Include practical spaces for day-to-day operating goals, owners, status, evidence, decisions, dates, links, and follow-ups where useful.",
+      "Preserve assumptions visibly when they affect operating decisions.",
+      "Do not repeat the opportunity brief verbatim. Reformat it into an execution-oriented operating document.",
+    ].join("\n"),
+    input: JSON.stringify(
+      {
+        project: {
+          name: project?.name,
+          opportunityName: project?.opportunityName,
+          author: project?.author,
+          version: project?.version,
+          date: new Date().toISOString(),
+        },
+        finalMarkdown,
+        sections,
+      },
+      null,
+      2,
+    ),
+    text: {
+      verbosity: "medium",
+      format: {
+        type: "json_schema",
+        name: "operating_document",
+        strict: true,
+        schema: operatingSchema,
+      },
+    },
+  };
+}
+
 export default async function handler(req, res) {
   sendCors(req, res);
 
@@ -216,10 +275,15 @@ export default async function handler(req, res) {
   }
 
   try {
-    const openAiPayload =
-      payload.action === "final"
-        ? buildFinalPayload(payload)
-        : buildSectionPayload(payload);
+    let openAiPayload;
+
+    if (payload.action === "final") {
+      openAiPayload = buildFinalPayload(payload);
+    } else if (payload.action === "operating") {
+      openAiPayload = buildOperatingPayload(payload);
+    } else {
+      openAiPayload = buildSectionPayload(payload);
+    }
     const responseBody = await callOpenAI(apiKey, openAiPayload);
     const text = collectOutputText(responseBody);
 
