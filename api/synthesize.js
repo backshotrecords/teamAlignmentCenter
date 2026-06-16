@@ -1,4 +1,4 @@
-const OPENAI_MODEL = "gpt-5.4";
+const OPENAI_MODEL = "gpt-5.4-mini";
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 
 const sectionSchema = {
